@@ -1,14 +1,17 @@
 let rp = require('request-promise')
 let Promise = require('bluebird')
 let _ = require('lodash')
+let fs = require('fs')
 
 let config = {
+  email: 'larryteal@163.com',
+  name: 'Larry',
+  mobile: '18300000000',
   getSeedOptions(email) {
     let options = {
       uri: 'https://hr.tuputech.com/recruit/v2/tree/user',
       method: 'POST',
       form: {
-        // Like <input type="text" name="name">
         email
       },
       headers: {
@@ -70,7 +73,6 @@ let config = {
       uri: 'https://hr.tuputech.com/recruit/v2/tree/success',
       method: 'POST',
       form: {
-        // Like <input type="text" name="name">
         fruit,
         seed
       },
@@ -84,7 +86,40 @@ let config = {
       }
     }
     return options
+  },
+  getUploadOptions(seed, name, mobile){
+    let options = {
+      uri: 'https://hr.tuputech.com/recruit/v2/tree/file',
+      method: 'POST',
+      formData: {
+        seed,
+        name,
+        mobile,
+        uploadCodes: {
+          value: fs.createReadStream('./index.js'),
+          options: {
+            filename: 'index.js',
+            contentType: 'text/plain'
+          }
+        }
+      },
+      headers: {
+        'content-type': 'multipart/form-data'
+      }
+    }
+    return options
   }
+}
+
+async function getSeedInfo(seedOptions) {
+  let seedInfo = await rp(seedOptions)
+  seedInfo = JSON.parse(seedInfo)
+  return seedInfo
+}
+async function getData(dataOptions) {
+  let data = await rp(dataOptions)
+  data = JSON.parse(data)
+  return data
 }
 
 async function getAnswer(data, seedInfo) {
@@ -111,7 +146,6 @@ async function getAnswer(data, seedInfo) {
         promiseArr.push(res)
       }
       resolveData(item.child)
-      // process.nextTick(resolveData.bind(this, item.child))
     }
   }
   resolveData(child)
@@ -122,19 +156,43 @@ async function getAnswer(data, seedInfo) {
   return data
 }
 
-const EMAIL = 'dd123@qqqs.com';
+async function submitAnswer(answerOptions) {
+  let scoreInfo = await rp(answerOptions)
+  return scoreInfo
+}
 
-(async function main() {
-  let seedOptions = config.getSeedOptions(EMAIL)
-  // get seed
-  let seedInfo = await rp(seedOptions)
-  seedInfo = JSON.parse(seedInfo)
+async function submitFruit(fruitOptions) {
+  let fruitInfo = await rp(fruitOptions)
+  return fruitInfo
+}
+async function uploadSourceCode(uploadOptions) {
+  let result = await rp(uploadOptions)
+  return result
+}
+
+
+;(async function main() {
+  let seedOptions = config.getSeedOptions(config.email)
+  // get seed info
+  let seedInfo = await getSeedInfo(seedOptions)
   let dataOptions = config.getDataOptions(seedInfo)
-  // // get question data
-  let data = await rp(dataOptions)
-  data = JSON.parse(data)
+  // get question data
+  let data = await getData(dataOptions)
+  // get answer
   let answer = await getAnswer(data, seedInfo)
   let submitAnswerOptions = config.getSubmitAnswerOptions(answer)
-  let result = await rp(submitAnswerOptions)
-  console.log(result)
+  // submit answer
+  let scoreInfo = await submitAnswer(submitAnswerOptions)
+  if (!scoreInfo.fruit) {
+    console.log('Do not get fruit, score is', scoreInfo)
+    return
+  }
+  let fruitOptions = config.getFruitOptions(scoreInfo.fruit, scoreInfo.seed)
+  // submit fruit
+  let fruitInfo = await submitFruit(fruitOptions)
+  console.log('fruitInfo is', fruitInfo)
+  let uploadOptions = config.getUploadOptions(seedInfo.seed, config.name, config.mobile)
+  // upload source code
+  let uploadResult = await uploadSourceCode(uploadOptions)
+  console.log('uploadResult', uploadResult)
 })()
